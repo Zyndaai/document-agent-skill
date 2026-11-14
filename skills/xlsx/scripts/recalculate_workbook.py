@@ -59,12 +59,30 @@ def check_zip(path: Path) -> None:
             raise RuntimeError(f"LibreOffice output is missing required part: {missing[0]}")
 
 
+def cells_with_cached_value(path: Path) -> set[str]:
+    """Formula cells whose XML holds a cached value, "" included.
+
+    openpyxl reads a cached empty string as None, the same as no cache, so a formula
+    such as IF(COUNTA(A:A)=0,"",...) was reported as never calculated. A blank
+    result to fill an empty input row is a normal workbook pattern.
+    """
+    cached: set[str] = set()
+    with zipfile.ZipFile(path) as archive:
+        for sheet_name, part in worksheet_parts(archive).items():
+            root = ElementTree.fromstring(archive.read(part))
+            for cell in root.findall(f".//{{{SHEET_NS}}}c"):
+                if cell.find(f"{{{SHEET_NS}}}f") is not None and cell.find(f"{{{SHEET_NS}}}v") is not None:
+                    cached.add(f"{sheet_name}!{cell.attrib['r']}")
+    return cached
+
+
 def workbook_report(path: Path) -> dict[str, Any]:
     try:
         from openpyxl import load_workbook
     except ImportError as error:
         raise RuntimeUnavailableError("openpyxl is missing from the baked runtime") from error
 
+    cached_in_xml = cells_with_cached_value(path)
     formula_book = load_workbook(path, read_only=True, data_only=False, keep_links=True)
     cached_book = load_workbook(path, read_only=True, data_only=True, keep_links=True)
     formulas: dict[str, str] = {}
@@ -83,7 +101,8 @@ def workbook_report(path: Path) -> dict[str, Any]:
                     location = f"{formula_sheet.title}!{formula_cell.coordinate}"
                     formulas[location] = str(formula_cell.value)
                     if cached_cell.value is None:
-                        missing.append(location)
+                        if location not in cached_in_xml:
+                            missing.append(location)
                     elif cached_cell.data_type == "e" or (
                         isinstance(cached_cell.value, str)
                         and cached_cell.value.startswith("#")

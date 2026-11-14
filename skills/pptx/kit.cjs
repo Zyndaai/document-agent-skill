@@ -177,7 +177,7 @@ function deck(o = {}) {
   // ---- low level (all mirror-aware, colors default from the slide's theme s.c) ----
   /** styled text: d.text(s, str, cls, {x, y, w, h, ...inline CSS}). An object in the cls slot is the box plus inline CSS. */
   function stext(s, str, cls, at) {
-    if (cls && typeof cls === 'object' && !Array.isArray(cls)) { at = cls; cls = ''; }
+    [cls, at] = inlineClass(cls, at);
     const [b, { on, ...inline }] = split4(at);   // on: the colour under this text when a shape, not the slide, is its ground
     if ([b.x, b.y, b.w, b.h].some((v) => typeof v !== 'number')) throw new Error('text needs a box {x, y, w, h} in inches (from d.page, d.split, d.grid, d.stack)');
     const c = resolve(cls, inline);
@@ -187,10 +187,14 @@ function deck(o = {}) {
     if (size < 18 && contrast(ink, ground) < 4.5) warn(`text "${String(str).slice(0, 24)}" (${size}pt, #${ink} on #${ground}) has contrast ${contrast(ink, ground).toFixed(1)}:1, under 4.5:1 for small text`);
     raw(s, caseOf(c, str), { ...inner, ...opt, align: align ? (align === flip('left') ? 'start' : align === flip('right') ? 'end' : align) : 'start' });
   }
+  // d.box(s, {style}, box) and d.text(s, str, {style}, box): a style object in the class's place is inline style.
+  // It used to replace the box, so the call drew at no position and returned null coordinates.
+  const inlineClass = (cls, at) => (cls && typeof cls === 'object' && !Array.isArray(cls) ? ['', at ? { ...at, ...cls } : cls] : [cls, at]);
   /** a region from a class: background, border, borderRadius, per-side borders, padding. Returns the inside box for its content. */
   function box(s, cls, at) {
-    if (cls && typeof cls === 'object' && !Array.isArray(cls)) { at = cls; cls = ''; }
+    [cls, at] = inlineClass(cls, at);
     const [b, inline] = split4(at);
+    if ([b.x, b.y, b.w, b.h].some((v) => typeof v !== 'number')) throw new Error('box needs a box {x, y, w, h} in inches (from d.page, d.split, d.grid, d.stack)');
     return paint(s, resolve(cls, inline), b);
   }
   /** stack text items top to bottom inside a box: items [[str, cls, inline?], …]; heights come from each class's size. Returns the space left below. */
@@ -217,11 +221,14 @@ function deck(o = {}) {
       ...r, x: X(x, w), y, w, h, align: al,
     });
   }
+  // fill, line and color take what every other kit call takes: #RRGGBB, a --variable or a theme name ('rule', 'accent').
+  // PptxGenJS draws a name it does not know as black, without a word.
   function rect(s, a) {
     const { x, y, w, h, fill, line, shape = 'rect', alpha, lw = 1 } = a;
-    s.addShape(shape, { x: X(x, w), y, w, h, fill: fill ? { color: fill, transparency: alpha || 0 } : { type: 'none' }, line: line ? { color: line, width: lw } : { type: 'none' } });
+    if ([x, y, w, h].some((v) => typeof v !== 'number')) throw new Error('rect needs {x, y, w, h} in inches');
+    s.addShape(shape, { x: X(x, w), y, w, h, fill: fill ? { color: colour(s, fill), transparency: alpha || 0 } : { type: 'none' }, line: line ? { color: colour(s, line), width: lw } : { type: 'none' } });
   }
-  const rule = (s, x, y, w, color, pt = 0.75) => s.addShape('line', { x: X(x, w), y, w, h: 0, line: { color: color || s.c.rule, width: pt } });
+  const rule = (s, x, y, w, color, pt = 0.75) => s.addShape('line', { x: X(x, w), y, w, h: 0, line: { color: color ? colour(s, color) : s.c.rule, width: pt } });
   /** a line between two points at any angle, mirror-aware: d.line(s, {x1, y1, x2, y2, color, width, arrow, dash}). arrow: true at the end, 'both', 'start'. */
   function drawLine(s, a) {
     const { x1, y1, x2, y2, color, width = 1.5, arrow, dash } = a;
@@ -369,13 +376,37 @@ function deck(o = {}) {
     pptx, T: { ...LIGHT, fonts: F, S, W, H, M }, rtl, X, mix, fit, page, split, grid,
     slide, text: stext, box, stack, rect, rule, line: drawLine, circle, stat, panel, table, timeline, bars,
     save: async (file) => {
-      require('fs').mkdirSync(require('path').dirname(file), { recursive: true });
-      await pptx.writeFile({ fileName: file });
-      const kb = Math.round(require('fs').statSync(file).size / 1024);
+      const fs = require('fs');
+      fs.mkdirSync(require('path').dirname(file), { recursive: true });
+      const { bytes, shared } = await storeMediaOnce(await pptx.write({ outputType: 'nodebuffer' }));
+      fs.writeFileSync(file, bytes);
+      const kb = Math.round(bytes.length / 1024);
       if (!kb) throw new Error('empty pptx');
-      console.log(`wrote ${file}: ${pptx.slides.length} slides, ${kb} KB`);
+      console.log(`wrote ${file}: ${pptx.slides.length} slides, ${kb} KB${shared ? `, ${shared} repeated pictures stored once` : ''}`);
     },
   };
+}
+
+/**
+ * PptxGenJS writes a picture's bytes again for every placement, so one photo on two slides is stored twice
+ * (a 14.6 MB deck held two byte-identical pairs). Keep one file per distinct picture and point every slide at it.
+ */
+async function storeMediaOnce(buffer) {
+  const JSZip = require(require.resolve('jszip', { paths: [require.resolve('pptxgenjs')] }));
+  const zip = await JSZip.loadAsync(buffer), first = new Map(), same = new Map();
+  for (const name of Object.keys(zip.files).filter((n) => n.startsWith('ppt/media/') && !zip.files[n].dir).sort()) {
+    const hash = require('crypto').createHash('sha1').update(await zip.file(name).async('nodebuffer')).digest('hex');
+    if (first.has(hash)) same.set(name.slice('ppt/media/'.length), first.get(hash).slice('ppt/media/'.length));
+    else first.set(hash, name);
+  }
+  if (!same.size) return { bytes: buffer, shared: 0 };
+  for (const name of Object.keys(zip.files).filter((n) => n.endsWith('.rels'))) {
+    const xml = await zip.file(name).async('string');
+    const next = xml.replace(/Target="([^"]*\/media\/)([^"/]+)"/g, (all, dir, file) => (same.has(file) ? `Target="${dir}${same.get(file)}"` : all));
+    if (next !== xml) zip.file(name, next);
+  }
+  for (const file of same.keys()) zip.remove(`ppt/media/${file}`);
+  return { bytes: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }), shared: same.size };
 }
 
 module.exports = { deck, PALETTES, FONTS };

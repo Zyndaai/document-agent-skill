@@ -155,13 +155,43 @@ async function main() {
       await document.fonts.ready;
     });
 
+    // the page the author's own @page rules set: the skill invites a 6x9in book or a landscape sheet, and measuring
+    // those against --size printed false "empty stretch" warnings and missed real overflow
+    const sheet = await page.evaluate(({ W, H, margin, MT, MB, MM }) => {
+      const probe = document.createElement('div'); document.body.append(probe);
+      const mm = (v) => { probe.style.width = v; return probe.getBoundingClientRect().width / MM; };
+      const NAMED = { A5: [148, 210], A4: [210, 297], A3: [297, 420], B5: [176, 250], B4: [250, 353], LETTER: [215.9, 279.4], LEGAL: [215.9, 355.6], LEDGER: [279.4, 431.8] };
+      const out = { W, H, ml: margin, mr: margin, mt: MT, mb: MB };
+      for (const sheet of document.styleSheets) for (const r of sheet.cssRules) { // in order, so the author's rules, which come later, win
+        if (!(r instanceof CSSPageRule) || r.selectorText.trim()) continue; // the unnamed page; named and :first pages are the author's exceptions
+        const size = r.style.getPropertyValue('size').trim().split(/\s+/).filter(Boolean);
+        const turn = size.find((t) => /^(landscape|portrait)$/i.test(t)), dims = size.filter((t) => t !== turn && t !== 'auto');
+        let wh = dims.length && NAMED[dims[0].toUpperCase()] ? [...NAMED[dims[0].toUpperCase()]] : dims.length ? [mm(dims[0]), mm(dims[1] || dims[0])] : turn ? [out.W, out.H] : null;
+        if (wh && turn && (turn.toLowerCase() === 'landscape') !== wh[0] > wh[1]) wh = [wh[1], wh[0]];
+        if (wh && wh.every((v) => v > 0)) [out.W, out.H] = wh;
+        for (const [k, side] of [['ml', 'left'], ['mr', 'right'], ['mt', 'top'], ['mb', 'bottom']]) {
+          const v = r.style.getPropertyValue(`margin-${side}`).trim();
+          if (v) out[k] = mm(v);
+        }
+      }
+      probe.remove();
+      return out;
+    }, { W: SIZES[size][0], H: SIZES[size][1], margin, MT, MB, MM });
+    const contentW = sheet.W - sheet.ml - sheet.mr;
+    if (Math.abs(sheet.W - SIZES[size][0]) > 0.5 || Math.abs(sheet.H - SIZES[size][1]) > 0.5 || Math.abs(contentW - (SIZES[size][0] - 2 * margin)) > 0.5) {
+      await page.setViewportSize({ width: Math.round(contentW * MM), height: 1400 });
+      await page.evaluate((v) => { const st = document.createElement('style'); st.textContent = v; document.head.children[0].after(st); },
+        `:root{--page-w:${sheet.W}mm;--page-h:${sheet.H}mm;--content-w:${contentW}mm;--content-h:${sheet.H - sheet.mt - sheet.mb}mm}`);
+      console.log(`page: ${Math.round(sheet.W)}x${Math.round(sheet.H)}mm from your @page`);
+    }
+
     // the footer stays on one line, so text too long for the room beside the page number would run into it
     const footerText = o.footer || title;
     const footerMm = await page.evaluate(({ text, face, MM }) => {
       const g = document.createElement('canvas').getContext('2d'); g.font = `8.5pt "${face}", sans-serif`;
       return g.measureText(text).width / MM;
     }, { text: footerText, face: rtl && lang !== 'he' ? 'IBMPlexSansArabic' : 'Rubik', MM });
-    const footerRoom = W - 2 * margin - 25; // 25mm for "Page 10 of 12" and a gap
+    const footerRoom = contentW - 25; // 25mm for "Page 10 of 12" and a gap
     if (footerMm > footerRoom) warn(`footer text is ${Math.round(footerMm)}mm wide and only ${Math.round(footerRoom)}mm fit beside the page number: shorten it to about ${Math.floor(footerText.length * footerRoom / footerMm)} characters`);
 
     // what a browser can measure about the laid-out page
@@ -275,7 +305,7 @@ async function main() {
         }
         return out;
       });
-    }, { H: SIZES[size][1], MM, ruleMargins: [MT, MB] });
+    }, { H: sheet.H, MM, ruleMargins: [MT, MB] });
     console.log(`fit: ${fit.map((f) => `${f.n} ${f.name} ${f.h}/${f.U}mm`).join(' · ')}`);
     for (const f of fit) {
       if (f.spill) warn(`section ${f.n} (${f.name}) is ${f.h}mm on a ${f.U}mm page: about ${f.spill}mm spills onto a page of its own${f.at ? `, from "${f.at}"` : ' (a blank page if nothing is left to print)'}. Take that much out`);
