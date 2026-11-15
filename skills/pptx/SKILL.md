@@ -15,7 +15,7 @@ Write one generator `<project-root>/src/build.cjs` on `require('<skills-root>/pp
 1. Plan the story first: audience, the one-line argument, what each slide must do. Then decide each slide's form from its content, as `artifact-taste` describes. Write the decision as the first comment of the generator. Eight or more slides need a way to navigate (an agenda, a running section marker, a map of the argument).
 2. Write the generator and run it; the printed slide count must match the plan.
 3. Look: `python <skills-root>/artifact-taste/preview.py <project-root>/out/deck.pptx`, open the slide images, fix and rebuild.
-4. Facts: use only supplied facts. Mark derived numbers as derived, proposals as `Proposed`, and put required labels (for example "Fictional") in `deck({footer})`.
+4. Facts: as artifact-taste says, the user's facts plus researched ones with their source on the slide; arithmetic on supplied figures needs no label. Name proposals once, in `deck({footer})` ("Plans and allocations are proposed"), not on each slide or element; a required label such as "Fictional" goes there too.
 
 ## Kit
 

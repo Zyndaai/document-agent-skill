@@ -62,6 +62,6 @@ Write the content once and let it flow; `pageBreak()` only for real section brea
 
 ## Rules
 
-- Use only supplied facts and dates; label derived figures; label fictional scenarios. Do not invent citations.
+- Facts as artifact-taste says: supplied or researched and cited, never invented; arithmetic on supplied figures needs no label; proposals are named once, not on every paragraph; fictional scenarios are labelled fictional.
 - No clipped text; images local.
 - Comments, tracked changes and deep edits of uploaded Word files are out of scope; patch the generator.

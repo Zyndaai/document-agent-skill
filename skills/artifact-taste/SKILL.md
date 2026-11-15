@@ -17,8 +17,10 @@ Look for what only this content has: its objects, places, numbers, dates and not
 Left alone you pick the same look every time, and when asked to choose dials freely you pick the same ends every time. So chance narrows the choice and you make it. After writing your `Direction:` line, run:
 
 ```
-python <skills-root>/artifact-taste/dials.py <format> "<one line: the subject and what the document is for>"
+python <skills-root>/artifact-taste/dials.py <format> '<one line: the subject and what the document is for>'
 ```
+
+Run it alone, with the line in single quotes and no apostrophe in it: in double quotes the shell reads `$500k` as a variable and prints `00k`.
 
 It deals three complete looks, far apart from each other, each setting shape, line, contrast, ground, type voice, scale, density, rhythm, alignment, colour role and colour temperature with concrete values for your format, and prints a `Dials:` line for each. The same subject line always gets the same three.
 
@@ -59,5 +61,6 @@ style: {
 ## Edits, templates and hard rules
 
 - Editing or continuing a document, or working from a user's template or brand: its identity is fixed; change only what was asked.
-- Use only the facts, figures and dates you were given; label what is derived or fictional.
+- Facts are the ones you were given, plus any you found and cite on the page. Never invent a figure or a source. A number the document needs and the user did not give (a market size, a benchmark) is researched and cited, not written around.
+- Arithmetic on the user's own figures (per shop, per year, a total) is shown plainly, with no "derived" tag. Say once that plans and allocations are proposals, in the footer or one small legend, never on each element. A document makes its case: no notes on what the figures do not prove. Fictional or sample data is labelled as such.
 - An image shows something from the brief, or is labelled illustrative. No decoration. `artifact-taste/image.cjs` turns any HTML or SVG file into a PNG (PDF takes inline SVG directly).

@@ -52,7 +52,7 @@ python <skills-root>/artifact-taste/preview.py <project-root>/out/x.pdf
 
 ## Rules
 
-- Use only supplied facts and dates; label derived figures as derived and fictional scenarios as fictional. Do not invent sources.
+- Facts as artifact-taste says: supplied or researched and cited, never invented; arithmetic on supplied figures needs no label; proposals are named once (the footer or one note), not on every block; fictional scenarios are labelled fictional.
 - Right-to-left: write text in logical order, never reversed or pre-shaped. Wrap a Latin phrase, email, code or number range inside Arabic in `<bdi dir="ltr">`. Flex and grid mirror by themselves; in a chart you draw, the first item sits at the right.
 - Eight or more pages: add a contents or overview page.
 - Continuation: edit `doc.html` and rebuild the same path. A document made earlier with a generator program: write its content into a new `doc.html`, keeping its look.
