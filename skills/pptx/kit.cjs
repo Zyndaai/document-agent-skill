@@ -237,6 +237,26 @@ function deck(o = {}) {
     s.addShape('line', { x: Math.min(ax, bx), y: Math.min(y1, y2), w: Math.abs(bx - ax), h: Math.abs(y2 - y1), ...(bx < ax ? { flipH: true } : {}), ...(y2 < y1 ? { flipV: true } : {}),
       line: { color: color ? colour(s, color) : s.c.ink, width, ...(dash ? { dashType: dash === true ? 'dash' : dash } : {}), ...(arrow === true || arrow === 'both' ? { endArrowType: 'triangle' } : {}), ...(arrow === 'start' || arrow === 'both' ? { beginArrowType: 'triangle' } : {}) } });
   }
+  /**
+   * a picture in a box, mirror-aware: d.image(s, file, {x, y, w, h}, {fit, alt}). fit 'cover' (default) fills the box
+   * and crops the overflow evenly; 'contain' shows the whole picture centred in the box. Returns the box it drew.
+   * PptxGenJS crops from the picture's own proportions, which a generator never knows, so they are read from the file.
+   */
+  function image(s, file, at, { fit = 'cover', alt } = {}) {
+    const { x, y, w, h } = at || {};
+    if ([x, y, w, h].some((v) => typeof v !== 'number')) throw new Error('image needs a box {x, y, w, h} in inches');
+    if (fit !== 'cover' && fit !== 'contain') throw new Error("image fit is 'cover' (fill the box, crop the rest) or 'contain' (whole picture)");
+    const [iw, ih] = pictureSize(file);
+    const altText = alt || require('path').basename(file);
+    if (fit === 'contain') {
+      const k = Math.min(w / iw, h / ih), rw = iw * k, rh = ih * k, rx = x + (w - rw) / 2, ry = y + (h - rh) / 2;
+      s.addImage({ path: file, x: X(rx, rw), y: ry, w: rw, h: rh, altText });
+      return { x: rx, y: ry, w: rw, h: rh };
+    }
+    const k = Math.max(w / iw, h / ih);
+    s.addImage({ path: file, x: X(x, w), y, w: iw * k, h: ih * k, sizing: { type: 'cover', w, h }, altText });
+    return { x, y, w, h };
+  }
   /** a circle by its centre and radius, mirror-aware: d.circle(s, {cx, cy, r, fill, line, lw, alpha}) */
   function circle(s, a) {
     const { cx, cy, r, fill, line, lw, alpha } = a;
@@ -374,7 +394,7 @@ function deck(o = {}) {
 
   return {
     pptx, T: { ...LIGHT, fonts: F, S, W, H, M }, rtl, X, mix, fit, page, split, grid,
-    slide, text: stext, box, stack, rect, rule, line: drawLine, circle, stat, panel, table, timeline, bars,
+    slide, text: stext, box, stack, rect, rule, line: drawLine, circle, image, stat, panel, table, timeline, bars,
     save: async (file) => {
       const fs = require('fs');
       fs.mkdirSync(require('path').dirname(file), { recursive: true });
@@ -385,6 +405,23 @@ function deck(o = {}) {
       console.log(`wrote ${file}: ${pptx.slides.length} slides, ${kb} KB${shared ? `, ${shared} repeated pictures stored once` : ''}`);
     },
   };
+}
+
+/** [width, height] in pixels from a PNG or JPEG header. */
+function pictureSize(file) {
+  const fs = require('fs');
+  if (!fs.existsSync(file)) throw new Error(`image: no such file ${file}`);
+  const b = fs.readFileSync(file);
+  if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47) return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    for (let i = 2; i + 9 < b.length;) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const m = b[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return [b.readUInt16BE(i + 7), b.readUInt16BE(i + 5)];
+      i += 2 + b.readUInt16BE(i + 2);
+    }
+  }
+  throw new Error(`image: ${file} is not a PNG or JPEG; d.image reads those (docImages saves both)`);
 }
 
 /**

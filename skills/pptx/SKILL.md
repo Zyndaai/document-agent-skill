@@ -56,7 +56,7 @@ There is no ready-made cover, slide header, row of big numbers, step row or card
 | `d.bars(s,{x,y,w,h,labels,values\|series:[{name,values}],dir:'bar'\|'col',fmt,hi?})` | native chart with value labels; `fmt` `'$#,##0'`, `'0%'` (fractions), `'0.0'`; `hi` highlights one, and a value tiny beside the largest draws as a sliver with little colour to see; negative values draw below zero in `dir:'col'`; in `'bar'` a negative value's label lands on its category name |
 | `d.timeline(s, [{date,label,detail?,at?}], {x,y,w,h,dir:'h'\|'v',span?})` | markers; `at` 0..1 places them in proportion; two items draw a span with `span` text inside |
 
-Anything else: `s.addChart`, `s.addImage`, `s.addShape` directly, with `d.X(x, w)` for x so right-to-left mirrors.
+Pictures: `d.image(s, file, box, {fit: 'cover' | 'contain', alt})` fills the box and crops the overflow evenly (`cover`, the default) or shows the whole picture centred (`contain`); it reads the picture's own size, so never compute crops or pass pixel sizes. Anything else: `s.addChart`, `s.addShape` directly, with `d.X(x, w)` for x so right-to-left mirrors.
 
 ## Rules
 
